@@ -26,7 +26,24 @@ const auth = (req, res, next) => {
     return res.status(401).json({ msg: "Invalid token" });
   }
 };
+//Get users for the admin data 
+// GET USERS (ADMIN ONLY)
+router.get("/users", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "Admin") {
+      return res.status(403).json({ msg: "Access denied" });
+    }
 
+    const users = await User.find({
+      tenantId: req.user.tenantId,
+      role: "User"
+    }).select("_id name email");
+
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
+});
 
 //  REGISTER ADMIN (ONE PER TENANT)
 router.post("/auth/register-admin", async (req, res) => {
@@ -114,7 +131,11 @@ router.post("/auth/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({ token });
+    res.json({
+  token,
+  role: user.role,
+  name: user.name
+});
 
   } catch (err) {
     res.status(500).json({ msg: err.message });
@@ -219,6 +240,35 @@ console.log("DB TASK:", debugTask);
     res.json(task);
 
   } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
+});
+router.delete("/tasks/:id", auth, async (req, res) => {
+  try {
+    //  Only Admin can delete
+    if (req.user.role !== "Admin") {
+      return res.status(403).json({ msg: "Access denied" });
+    }
+
+    console.log("USER:", req.user);
+    console.log("DELETE ID:", req.params.id);
+
+    //  tenant isolation applied
+    const task = await Task.findOneAndDelete({
+      _id: req.params.id,
+      tenantId: req.user.tenantId
+    });
+
+    console.log("DELETED TASK:", task);
+
+    if (!task) {
+      return res.status(404).json({ msg: "Task not found" });
+    }
+
+    res.json({ msg: "Task deleted successfully" });
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ msg: err.message });
   }
 });
